@@ -1,0 +1,14 @@
+# RStudio junk files
+.Rhistory
+.RData
+.Rproj.user/
+*.Rproj
+
+# Mac system files
+.DS_Store
+
+# R Connect deployment files
+rsconnect/
+
+# Output reports or exports
+outputs/
