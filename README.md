@@ -23,3 +23,7 @@ This project presents a hybrid risk management framework to assess market risk a
 2. Open `risk_model_report.Rmd` in RStudio
 3. Run the Shiny app (`risk_dashboard_app.R`) to interact with simulations
 
+
+## Requirements
+- R (version 4.0+ recommended)
+- R Packages: shiny, plotly, quantmod, PerformanceAnalytics, MASS, corrplot, caret, randomForest, rmarkdown

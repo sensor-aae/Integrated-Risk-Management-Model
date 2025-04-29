@@ -10,7 +10,6 @@ output:
     theme: cosmo
     code_folding: hide
     df_print: paged
-runtime: shiny
 ---
 
 ```{r setup, include=FALSE}
@@ -41,7 +40,7 @@ mu <- colMeans(returns)
 cov_matrix <- cov(returns)
 port_sd <- sqrt(t(weights) %*% cov_matrix %*% weights)
 
-# Parametric VaR (95%)
+### 1.1 Parametric VaR (95%)
 var_95 <- qnorm(0.05, mean = 0, sd = port_sd)
 es_95 <- -port_sd * dnorm(qnorm(0.05)) / 0.05
 
@@ -49,7 +48,7 @@ cat("Portfolio Std Dev:", round(port_sd, 6), "\n")
 paste("Parametric VaR (95%):", round(var_95, 6))
 cat("Expected Shortfall (95%):", round(es_95, 6), "\n")
 
-# Simulate portfolio returns (Monte Carlo)
+### 1.2 Simulate portfolio returns (Monte Carlo)
 set.seed(123)
 n <- 10000
 sim_returns <- mvrnorm(n, mu = mu, Sigma = cov_matrix)
