@@ -1,0 +1,108 @@
+# Shiny Interactive Dashboard
+
+library(shiny)
+library(plotly)
+library(corrplot)
+
+
+ui <- fluidPage(
+  titlePanel("Interactive Risk Simulator"),
+  
+  tabsetPanel(
+    tabPanel("Credit Risk Simulator",
+             sidebarLayout(
+               sidebarPanel(
+                 sliderInput("pd", "Probability of Default (PD):", min = 0.01, max = 0.5, value = 0.05, step = 0.01),
+                 sliderInput("lgd", "Loss Given Default (LGD):", min = 0.1, max = 1, value = 0.6, step = 0.05),
+                 numericInput("ead", "Exposure at Default (EAD):", value = 100000, min = 1000, step = 1000),
+                 numericInput("n", "Number of Simulations:", value = 10000, min = 1000, step = 1000),
+                 actionButton("go_credit", "Simulate Credit Risk")
+               ),
+               mainPanel(
+                 plotOutput("lossPlot"),
+                 verbatimTextOutput("summaryStats")
+               )
+             )
+    ),
+    
+    tabPanel("Market Risk Simulator",
+             sidebarLayout(
+               sidebarPanel(
+                 sliderInput("volatility", "Annualized Volatility:", min = 0.01, max = 0.5, value = 0.2, step = 0.01),
+                 numericInput("mu", "Expected Return:", value = 0.0005),
+                 numericInput("sim_days", "Days:", value = 252, min = 30),
+                 numericInput("sim_mc", "Simulations:", value = 10000, min = 1000),
+                 actionButton("go_market", "Simulate Market Risk")
+               ),
+               mainPanel(
+                 plotlyOutput("lossPlot_market"),
+                 verbatimTextOutput("summaryStats_market")
+               )
+             )
+    ),
+    
+    tabPanel("Correlation Matrix",
+             sidebarLayout(
+               sidebarPanel(
+                 checkboxGroupInput("tickers", "Select Stocks:", 
+                                    choices = c("AAPL", "MSFT", "GOOGL", "JPM"),
+                                    selected = c("AAPL", "MSFT", "GOOGL", "JPM")),
+                 actionButton("go_corr", "Show Correlation")
+               ),
+               mainPanel(
+                 plotOutput("corrPlot")
+               )
+             )
+    )
+  )
+)
+
+server <- function(input, output, session) {
+  
+  # CREDIT RISK
+  observeEvent(input$go_credit, {
+    sim_loss <- rbinom(input$n, 1, input$pd) * input$lgd * input$ead
+    output$lossPlot <- renderPlot({
+      hist(sim_loss, breaks = 40, col = "steelblue", main = "Simulated Credit Losses", xlab = "Loss")
+    })
+    output$summaryStats <- renderPrint({
+      list(
+        `VaR (95%)` = quantile(sim_loss, 0.95),
+        `Expected Shortfall` = mean(sim_loss[sim_loss > quantile(sim_loss, 0.95)])
+      )
+    })
+  })
+  
+  # MARKET RISK
+  observeEvent(input$go_market, {
+    set.seed(123)
+    sim_returns <- rnorm(input$sim_mc, mean = input$mu, sd = input$volatility / sqrt(252))
+    output$lossPlot_market <- renderPlotly({
+      plot_ly(x = ~sim_returns, type = "histogram", marker = list(color = 'darkgreen')) %>%
+        layout(title = "Simulated Daily Market Returns", 
+               xaxis = list(title = "Return"), 
+               yaxis = list(title = "Frequency"))
+    })
+    output$summaryStats_market <- renderPrint({
+      list(
+        `VaR (95%)` = quantile(sim_returns, 0.05),
+        `Expected Shortfall` = mean(sim_returns[sim_returns < quantile(sim_returns, 0.05)])
+      )
+    })
+  })
+  
+  # CORRELATION MATRIX
+  observeEvent(input$go_corr, {
+    req(input$tickers)
+    getSymbols(input$tickers, from = "2022-01-01", auto.assign = TRUE)
+    prices <- do.call(merge, lapply(input$tickers, function(t) Cl(get(t))))
+    returns <- na.omit(Return.calculate(prices))
+    corr_matrix <- cor(returns)
+    output$corrPlot <- renderPlot({
+      corrplot(corr_matrix, method = "color", type = "upper", 
+               tl.col = "black", addCoef.col = "black")
+    })
+  })
+}
+
+shinyApp(ui = ui, server = server)

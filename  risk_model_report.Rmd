@@ -1,0 +1,284 @@
+---
+title: "Integrated Risk Management Model"
+author: "Amanda"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+    theme: cosmo
+    code_folding: hide
+    df_print: paged
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+#1. Market Risk Engine – Parametric & Monte Carlo VaR
+```{r eruptions, echo=FALSE}
+
+
+library(quantmod)
+library(PerformanceAnalytics)
+library(MASS)
+
+# Get sample data (e.g., AAPL, MSFT, JPM, GOOGL)
+tickers <- c("AAPL", "MSFT", "GOOGL", "JPM")
+getSymbols(tickers, from = "2020-01-01")
+
+# Get adjusted close prices
+prices <- do.call(merge, lapply(tickers, function(t) Cl(get(t))))
+returns <- na.omit(Return.calculate(prices))
+
+# Assume equal weights
+weights <- rep(1/ncol(returns), ncol(returns))
+
+# Calculate portfolio return stats
+mu <- colMeans(returns)
+cov_matrix <- cov(returns)
+port_sd <- sqrt(t(weights) %*% cov_matrix %*% weights)
+
+# Parametric VaR (95%)
+var_95 <- qnorm(0.05, mean = 0, sd = port_sd)
+es_95 <- -port_sd * dnorm(qnorm(0.05)) / 0.05
+
+cat("Portfolio Std Dev:", round(port_sd, 6), "\n")
+paste("Parametric VaR (95%):", round(var_95, 6))
+cat("Expected Shortfall (95%):", round(es_95, 6), "\n")
+
+# Simulate portfolio returns (Monte Carlo)
+set.seed(123)
+n <- 10000
+sim_returns <- mvrnorm(n, mu = mu, Sigma = cov_matrix)
+portfolio_sim <- sim_returns %*% weights
+
+# Calculate simulated VaR and ES
+mc_var_95 <- quantile(portfolio_sim, 0.05)
+mc_es_95 <- mean(portfolio_sim[portfolio_sim <= mc_var_95])
+
+cat("Monte Carlo VaR (95%):", round(mc_var_95, 6), "\n")
+cat("Monte Carlo ES (95%):", round(mc_es_95, 6), "\n")
+
+```
+#2. Credit risk 
+```{r}
+#Credit risk 
+set.seed(42)
+
+# Define credit risk parameters
+n_sim <- 10000          # Number of simulations
+pd <- 0.05              # 5% chance of default
+lgd <- 0.6              # 60% loss if default happens
+ead <- 100000           # Exposure at default (e.g., bond value)
+
+# Simulate credit losses
+credit_losses <- rbinom(n_sim, 1, pd) * lgd * ead
+
+# Calculate risk metrics
+credit_var_95 <- quantile(credit_losses, 0.95)
+credit_es_95 <- mean(credit_losses[credit_losses > credit_var_95])
+
+cat("Credit VaR (95%):", round(credit_var_95, 2), "\n")
+cat("Credit Expected Shortfall (95%):", round(credit_es_95, 2), "\n")
+
+# Visualization of Credit Loss Distribution
+hist(credit_losses, breaks = 30, col = 'tomato', main = "Simulated Credit Loss Distribution", xlab = "Loss Amount")
+abline(v = credit_var_95, col = "blue", lwd = 2, lty = 2)
+
+
+```
+#3. Integrated Risk-Model
+```{r}
+# Integrated Risk
+
+market_sim <- portfolio_sim[1:10000]
+credit_sim <- credit_losses[1:10000]
+
+# Total integrated losses
+total_loss <- -market_sim + credit_sim  # note: market loss = -return
+
+# Calculate integrated risk metrics
+integrated_var_95 <- quantile(total_loss, 0.95)
+integrated_es_95 <- mean(total_loss[total_loss > integrated_var_95])
+
+cat("Integrated VaR (95%):", round(integrated_var_95, 2), "\n")
+cat("Integrated Expected Shortfall (95%):", round(integrated_es_95, 2), "\n")
+
+```
+#4. Scenario-based simulation
+```{r}
+# Stress test: 10% drop in equity, PD spikes to 25%
+set.seed(123)
+shock_equity <- market_sim * 0.9    # simulate 10% drop
+shock_credit <- rbinom(length(shock_equity), 1, 0.25) * lgd * ead
+
+stress_loss <- -shock_equity + shock_credit
+
+# Stress VaR/ES
+stress_var_95 <- quantile(stress_loss, 0.95)
+stress_es_95 <- mean(stress_loss[stress_loss > stress_var_95])
+
+cat("Stress Test VaR (95%):", round(stress_var_95, 2), "\n")
+cat("Stress Test ES (95%):", round(stress_es_95, 2), "\n")
+```
+#5. VaR Breach Counter
+```{r}
+library(quantmod)
+library(PerformanceAnalytics)
+
+library(quantmod)
+library(PerformanceAnalytics)
+
+# Use your same tickers
+tickers <- c("AAPL", "MSFT", "GOOGL", "JPM")
+getSymbols(tickers, from = "2020-01-01")
+
+# Adjusted prices and returns
+prices <- do.call(merge, lapply(tickers, function(t) Cl(get(t))))
+returns <- na.omit(Return.calculate(prices))
+weights <- rep(1/ncol(returns), ncol(returns))
+portfolio_returns <- Return.portfolio(returns, weights = weights)
+
+# Rolling 1-year window (252 trading days)
+window <- 252
+rolling_var <- rollapply(portfolio_returns, width = window, FUN = function(x) {
+  sd(x) * qnorm(0.05)
+}, by.column = FALSE, align = "right")
+
+# Backtesting comparison
+actual_returns <- portfolio_returns[(window+1):NROW(portfolio_returns)]
+predicted_var <- rolling_var
+
+# Align lengths safely
+min_len <- min(length(actual_returns), length(predicted_var))
+actual_returns <- actual_returns[1:min_len]
+predicted_var <- predicted_var[1:min_len]
+
+# Remove NA or infinite values
+valid_idx <- which(is.finite(actual_returns) & is.finite(predicted_var))
+actual_returns <- actual_returns[valid_idx]
+predicted_var <- predicted_var[valid_idx]
+
+summary(actual_returns)
+summary(predicted_var)
+any(!is.finite(actual_returns))   # should return FALSE
+any(!is.finite(predicted_var))    # should return FALSE
+
+# Count breaches
+breaches <- actual_returns < predicted_var
+breach_count <- sum(breaches)
+total <- length(breaches)
+
+cat("Total Observations:", total, "\n")
+cat("Number of VaR Breaches:", breach_count, "\n")
+cat("Breach Rate:", round(breach_count / total, 4), "\n")
+
+
+
+library(GAS)
+library(rugarch)
+
+# Kupiec test
+kupiec_test <- VaRTest(alpha = 0.95, actual = as.numeric(actual_returns), VaR = as.numeric(predicted_var))
+print(kupiec_test)
+
+# Additional backtest
+BacktestVaR(
+  data = as.numeric(actual_returns), 
+  VaR = as.numeric(predicted_var), 
+  alpha = 0.95, 
+  Lags = 4
+)
+
+
+# Plot results
+plot(actual_returns, type = "l", main = "VaR Backtest: Actual vs VaR", col = "black")
+lines(predicted_var, col = "red")
+points(which(breaches), actual_returns[breaches], col = "blue", pch = 16)
+legend("bottomleft", legend = c("Actual Returns", "VaR (95%)", "Breaches"), 
+       col = c("black", "red", "blue"), lty = c(1, 1, NA), pch = c(NA, NA, 16))
+
+
+```
+#6. Machine Learning-Based PD Estimator
+```{r}
+library(randomForest)
+library(caret)
+
+# Simulated credit dataset
+set.seed(123)
+n <- 1000
+credit_data <- data.frame(
+  leverage = runif(n, 0.1, 1.5),            # Debt/Assets
+  interest_coverage = runif(n, 0.01, 0.2),  # EBIT/Interest
+  rating_score = sample(1:5, n, replace = TRUE),  # Categorical proxy
+  default = as.factor(rbinom(n, 1, 0.1))               # Binary outcome
+)
+
+# Split data
+train_idx <- sample(1:n, size = 0.8 * n)
+train_data <- credit_data[train_idx, ]
+test_data <- credit_data[-train_idx, ]
+
+# Train random forest
+rf_model <- randomForest(default ~ ., data = train_data, ntree = 100)
+
+
+# Predict on test set
+test_probs <- predict(rf_model, newdata = test_data, type = "prob")[, 2]
+
+# Evaluate model
+conf_matrix <- confusionMatrix(as.factor(predict(rf_model, newdata = test_data)), as.factor(test_data$default))
+print(conf_matrix)
+
+```
+
+```{r}
+# Use the predicted PDs to simulate credit losses
+sim_pd <- test_probs
+lgd <- 0.6
+ead <- 100000
+sim_credit_loss <- rbinom(length(sim_pd), 1, sim_pd) * lgd * ead
+
+# Calculate risk metrics
+ml_credit_var <- quantile(sim_credit_loss, 0.95)
+ml_credit_es <- mean(sim_credit_loss[sim_credit_loss > ml_credit_var])
+
+cat("ML-Based Credit VaR (95%):", round(ml_credit_var, 2), "\n")
+cat("ML-Based Credit ES (95%):", round(ml_credit_es, 2), "\n")
+
+```
+
+
+# 7. Final Report Summary
+
+library(knitr)
+
+summary_table <- data.frame(
+  Metric = c(
+    "Monte Carlo VaR (95%)",
+    "Monte Carlo Expected Shortfall (95%)",
+    "Credit VaR (95%)",
+    "Credit Expected Shortfall (95%)",
+    "Integrated VaR (95%)",
+    "Integrated Expected Shortfall (95%)",
+    "Stress Test VaR (95%)",
+    "Stress Test Expected Shortfall (95%)",
+    "ML-Based Credit VaR (95%)",
+    "ML-Based Credit Expected Shortfall (95%)"
+  ),
+  Value = round(c(
+    mc_var_95, mc_es_95,
+    credit_var_95, credit_es_95,
+    integrated_var_95, integrated_es_95,
+    stress_var_95, stress_es_95,
+    ml_credit_var, ml_credit_es
+  ), 2)
+)
+
+Knit::kable(summary_table, caption = "Summary of Risk Metrics")
+
+```
