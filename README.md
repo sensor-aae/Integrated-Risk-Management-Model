@@ -27,3 +27,10 @@ This project presents a hybrid risk management framework to assess market risk a
 ## Requirements
 - R (version 4.0+ recommended)
 - R Packages: shiny, plotly, quantmod, PerformanceAnalytics, MASS, corrplot, caret, randomForest, rmarkdown
+
+## 👤 Author
+
+Amanda Achiangia  
+BSc Applied Mathematics (Financial Mathematics), York University  
+Aspiring Quantitative Finance Professional  
+[LinkedIn](https://www.linkedin.com/in/amanda-a-602328284/) | [GitHub](https://github.com/sensor-aae)
