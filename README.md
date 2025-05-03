@@ -2,6 +2,9 @@
 
 This project implements three methods of Value-at-Risk (VaR) and Expected Shortfall (ES) calculation — Historical, Parametric (Variance-Covariance), and Monte Carlo — on a diversified portfolio of equities and bonds. It supports stress testing and performance validation using statistical backtesting.
 
+## 🎯 Objective
+To build a scalable and interpretable risk engine capable of quantifying market risk exposure under various confidence levels and holding periods, replicating real-world financial institution practices.
+
 ## Features
 - Monte Carlo Simulation and Parametric Methods for Value at Risk (VaR)
 - Expected Shortfall (ES) and Volatility Computation
