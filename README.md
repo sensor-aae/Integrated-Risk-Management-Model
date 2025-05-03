@@ -1,22 +1,22 @@
 # Market Risk Engine – VaR & Expected Shortfall
 
-This project presents a hybrid risk management framework to assess market risk and credit risk for a diversified portfolio of S&P 500 equities and corporate bonds.
+This project implements three methods of Value-at-Risk (VaR) and Expected Shortfall (ES) calculation — Historical, Parametric (Variance-Covariance), and Monte Carlo — on a diversified portfolio of equities and bonds. It supports stress testing and performance validation using statistical backtesting.
 
 ## Features
 - Monte Carlo Simulation and Parametric Methods for Value at Risk (VaR)
 - Expected Shortfall (ES) and Volatility Computation
 - Correlation Matrix and Stress Testing
-- Credit Risk Quantification (PD, LGD, EAD modeling)
+- Credit Risk Quantification (PD, LGD, EAD modelling)
 - Interactive Dashboard using R Shiny
 
 ## Files
-- `risk_model_report.Rmd` - Main report integrating modeling and results
+- `risk_model_report.Rmd` - Main report integrating modelling and results
 - `risk_dashboard_app.R` - Interactive dashboard for simulation and visualization
-- `data/` - Folder containing any sample input datasets
+
 
 ## Technologies Used
 - R (Shiny, Plotly, Quantmod, PerformanceAnalytics)
-- RMarkdown for documentation
+- R Markdown for documentation
 
 ## Getting Started
 1. Clone the repository
