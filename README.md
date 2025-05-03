@@ -1,4 +1,4 @@
-# Integrated Risk Management Model
+# Market Risk Engine – VaR & Expected Shortfall
 
 This project presents a hybrid risk management framework to assess market risk and credit risk for a diversified portfolio of S&P 500 equities and corporate bonds.
 
