@@ -3,6 +3,8 @@
 library(shiny)
 library(plotly)
 library(corrplot)
+source("utils/kupiec_test.R")
+
 
 
 ui <- fluidPage(
@@ -17,6 +19,7 @@ ui <- fluidPage(
                  numericInput("ead", "Exposure at Default (EAD):", value = 100000, min = 1000, step = 1000),
                  numericInput("n", "Number of Simulations:", value = 10000, min = 1000, step = 1000),
                  actionButton("go_credit", "Simulate Credit Risk")
+                 fileInput("actual_file", "Upload CSV of Actual Returns", accept = ".csv")
                ),
                mainPanel(
                  plotOutput("lossPlot"),
@@ -74,22 +77,42 @@ server <- function(input, output, session) {
   })
   
   # MARKET RISK
-  observeEvent(input$go_market, {
-    set.seed(123)
-    sim_returns <- rnorm(input$sim_mc, mean = input$mu, sd = input$volatility / sqrt(252))
-    output$lossPlot_market <- renderPlotly({
-      plot_ly(x = ~sim_returns, type = "histogram", marker = list(color = 'darkgreen')) %>%
-        layout(title = "Simulated Daily Market Returns", 
-               xaxis = list(title = "Return"), 
-               yaxis = list(title = "Frequency"))
-    })
-    output$summaryStats_market <- renderPrint({
-      list(
-        `VaR (95%)` = quantile(sim_returns, 0.05),
-        `Expected Shortfall` = mean(sim_returns[sim_returns < quantile(sim_returns, 0.05)])
-      )
-    })
+ observeEvent(input$go_market, {
+  set.seed(123)
+  sim_returns <- rnorm(input$sim_mc, mean = input$mu, sd = input$volatility / sqrt(252))
+  
+  output$lossPlot_market <- renderPlotly({
+    plot_ly(x = ~sim_returns, type = "histogram", marker = list(color = 'darkgreen')) %>%
+      layout(title = "Simulated Daily Market Returns", 
+             xaxis = list(title = "Return"), 
+             yaxis = list(title = "Frequency"))
   })
+  
+  var_95 <- quantile(sim_returns, 0.05)
+  es_95 <- mean(sim_returns[sim_returns < var_95])
+  
+  output$summaryStats_market <- renderPrint({
+    list(
+      `VaR (95%)` = var_95,
+      `Expected Shortfall` = es_95
+    )
+  })
+  
+  # Kupiec Test
+  observeEvent(input$actual_file, {
+    actual_data <- read.csv(input$actual_file$datapath)
+    actual_returns <- actual_data[[1]]
+    test_result <- kupiec_test(actual_returns, rep(abs(var_95), length(actual_returns)), alpha = 0.05)
+    
+    showModal(modalDialog(
+      title = "Kupiec VaR Backtest",
+      paste("Breaches:", test_result$breaches),
+      paste("LR_pof:", test_result$LR_pof),
+      paste("p-value:", test_result$p_value),
+      paste("Result:", test_result$result)
+    ))
+  })
+})
   
   # CORRELATION MATRIX
   observeEvent(input$go_corr, {
