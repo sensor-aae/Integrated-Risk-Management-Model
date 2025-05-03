@@ -18,7 +18,7 @@ ui <- fluidPage(
                  sliderInput("lgd", "Loss Given Default (LGD):", min = 0.1, max = 1, value = 0.6, step = 0.05),
                  numericInput("ead", "Exposure at Default (EAD):", value = 100000, min = 1000, step = 1000),
                  numericInput("n", "Number of Simulations:", value = 10000, min = 1000, step = 1000),
-                 actionButton("go_credit", "Simulate Credit Risk")
+                 actionButton("go_credit", "Simulate Credit Risk"),
                  fileInput("actual_file", "Upload CSV of Actual Returns", accept = ".csv")
                ),
                mainPanel(
@@ -118,7 +118,7 @@ server <- function(input, output, session) {
   observeEvent(input$go_corr, {
     req(input$tickers)
     getSymbols(input$tickers, from = "2022-01-01", auto.assign = TRUE)
-    prices <- do.call(merge, lapply(input$tickers, function(t) Cl(get(t))))
+    prices <- do.call(merge, lapply(input$tickers, function(t)Cl(get(t))))
     returns <- na.omit(Return.calculate(prices))
     corr_matrix <- cor(returns)
     output$corrPlot <- renderPlot({
