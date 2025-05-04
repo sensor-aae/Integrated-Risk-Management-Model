@@ -3,14 +3,32 @@
 library(shiny)
 library(plotly)
 library(corrplot)
+library(rugarch)
 source("utils/kupiec_test.R")
 
 
 
 ui <- fluidPage(
   titlePanel("Interactive Risk Simulator"),
-  
   tabsetPanel(
+  tabPanel("Market Risk Simulator",
+           sidebarLayout(
+             sidebarPanel(
+               sliderInput("volatility", "Annualized Volatility:", min = 0.01, max = 0.5, value = 0.2, step = 0.01),
+               numericInput("mu", "Expected Return:", value = 0.0005),
+               numericInput("sim_days", "Days:", value = 252, min = 30),
+               numericInput("sim_mc", "Simulations:", value = 10000, min = 1000),
+               actionButton("go_market", "Simulate Market Risk"),
+               fileInput("actual_file", "Upload CSV of Actual Returns", accept = ".csv")
+             ),
+             mainPanel(
+               plotlyOutput("lossPlot_market"),
+               verbatimTextOutput("summaryStats_market")
+             )
+           )
+  ),
+  
+ 
     tabPanel("Credit Risk Simulator",
              sidebarLayout(
                sidebarPanel(
@@ -19,27 +37,11 @@ ui <- fluidPage(
                  numericInput("ead", "Exposure at Default (EAD):", value = 100000, min = 1000, step = 1000),
                  numericInput("n", "Number of Simulations:", value = 10000, min = 1000, step = 1000),
                  actionButton("go_credit", "Simulate Credit Risk"),
-                 fileInput("actual_file", "Upload CSV of Actual Returns", accept = ".csv")
+                 
                ),
                mainPanel(
                  plotOutput("lossPlot"),
                  verbatimTextOutput("summaryStats")
-               )
-             )
-    ),
-    
-    tabPanel("Market Risk Simulator",
-             sidebarLayout(
-               sidebarPanel(
-                 sliderInput("volatility", "Annualized Volatility:", min = 0.01, max = 0.5, value = 0.2, step = 0.01),
-                 numericInput("mu", "Expected Return:", value = 0.0005),
-                 numericInput("sim_days", "Days:", value = 252, min = 30),
-                 numericInput("sim_mc", "Simulations:", value = 10000, min = 1000),
-                 actionButton("go_market", "Simulate Market Risk")
-               ),
-               mainPanel(
-                 plotlyOutput("lossPlot_market"),
-                 verbatimTextOutput("summaryStats_market")
                )
              )
     ),
@@ -79,13 +81,15 @@ server <- function(input, output, session) {
   # MARKET RISK
  observeEvent(input$go_market, {
   set.seed(123)
-  sim_returns <- rnorm(input$sim_mc, mean = input$mu, sd = input$volatility / sqrt(252))
-  
+   sim_returns <- rt(input$sim_mc, df = 3) * (input$volatility / sqrt(252)) + input$mu
+   
   output$lossPlot_market <- renderPlotly({
     plot_ly(x = ~sim_returns, type = "histogram", marker = list(color = 'darkgreen')) %>%
       layout(title = "Simulated Daily Market Returns", 
              xaxis = list(title = "Return"), 
              yaxis = list(title = "Frequency"))
+  
+    
   })
   
   var_95 <- quantile(sim_returns, 0.05)
@@ -113,7 +117,8 @@ server <- function(input, output, session) {
     ))
   })
 })
-  
+ 
+ 
   # CORRELATION MATRIX
   observeEvent(input$go_corr, {
     req(input$tickers)
