@@ -25,3 +25,5 @@ kupiec_test <- function(actual_returns, var_series, alpha = 0.05) {
     result = ifelse(p_value > 0.05, "Model passes Kupiec test", "Model fails Kupiec test")
   )
 }
+
+

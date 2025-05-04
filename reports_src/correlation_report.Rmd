@@ -1,0 +1,47 @@
+---
+title: "Correlation Analysis Report"
+author: "Amanda Achiangia"
+date: "`r Sys.Date()`"
+output: pdf_document
+fontsize: 11pt
+geometry: margin=1in
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(quantmod)
+library(PerformanceAnalytics)
+library(corrplot)
+```
+
+## Executive Summary
+
+This report evaluates the interdependencies among selected equities using correlation analysis. Historical daily returns are computed for selected technology sector stocks, and a correlation matrix is derived to explore diversification potential and common risk factors.
+
+## Methodology
+
+- Download daily price data for 4 technology stocks
+- Calculate daily log returns
+- Compute pairwise correlation matrix
+- Visualize correlation structure with `corrplot`
+
+## Correlation Matrix Construction
+
+```{r corr-matrix, fig.cap="Correlation Matrix for Selected Stocks"}
+tickers <- c("AAPL", "MSFT", "GOOG", "AMZN")
+getSymbols(tickers, from = "2022-01-01", to = "2023-01-01")
+prices <- do.call(merge, lapply(tickers, function(t) Cl(get(t))))
+returns <- na.omit(ROC(prices))
+corr_matrix <- cor(returns)
+corrplot(corr_matrix, method = "color", type = "lower", tl.cex = 0.8)
+```
+
+## Interpretation
+
+- High correlations (e.g., AAPL/MSFT) suggest shared market risk and lower diversification.
+- Moderate correlations (e.g., GOOG/AMZN) may still contribute to portfolio diversification.
+- All four stocks are in the tech sector — future work can compare cross-sector correlations.
+
+## Conclusion
+
+The correlation analysis reveals the extent to which asset returns move together. This insight helps in constructing portfolios with desired levels of diversification and risk concentration. Future extensions could include dynamic correlation models or principal component analysis (PCA) for risk factor extraction.

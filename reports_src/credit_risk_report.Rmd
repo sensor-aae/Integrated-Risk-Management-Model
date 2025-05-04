@@ -1,0 +1,82 @@
+---
+title: "Credit Risk Simulation Report"
+author: "Amanda Achiangia"
+date: "`r Sys.Date()`"
+output: pdf_document
+params:
+  pd: 0.05
+  lgd: 0.6
+  ead: 100000
+  n_sim: 10000
+  n_obl: 100
+fontsize: 11pt
+geometry: margin=1in
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(ggplot2)
+library(kableExtra)
+```
+
+## Executive Summary
+
+This report simulates potential credit losses using Monte Carlo methods. The simulation uses standard credit risk inputs: Probability of Default (PD), Loss Given Default (LGD), and Exposure at Default (EAD). We assess the distribution of credit losses across trials, and summarize key metrics such as average loss and worst-case loss.
+
+## Methodology
+
+- Generate 1,000 simulated obligors
+- Each obligor defaults with probability PD
+- Loss per obligor = PD × LGD × EAD
+- Aggregate losses visualized and summarized
+
+## Credit Risk Simulation
+
+```{r credit-risk-sim, fig.cap="Simulated Credit Losses"}
+
+set.seed(123)
+
+pd <- params$pd
+lgd <- params$lgd
+ead <- params$ead
+n_sim <- params$n_sim
+n_obl <- params$n_obl
+
+cat(paste("Running", n_sim, "simulations for", n_obl, "obligors...\n"))
+
+# Simulate portfolio-level credit losses
+default_matrix <- matrix(rbinom(n_sim * n_obl, 1, pd), nrow = n_sim)
+loss_per_default <- lgd * ead
+total_losses <- rowSums(default_matrix) * loss_per_default
+
+# Plot distribution of portfolio losses
+hist(total_losses, breaks = 50, col = "purple", 
+     main = "Portfolio-Level Credit Loss Distribution", 
+     xlab = "Total Portfolio Loss ($)")
+
+# Summary metrics
+avg_loss <- mean(total_losses)
+max_loss <- max(total_losses)
+var_95 <- quantile(total_losses, 0.95)
+es_95 <- mean(total_losses[total_losses > var_95])
+expected_defaults <- pd * n_obl
+actual_defaults <- mean(rowSums(default_matrix))
+
+# Summary table
+loss_summary <- data.frame(
+  Metric = c("Expected Defaults", "Avg Defaults", "Average Total Loss", "Max Loss", "95% VaR", "Expected Shortfall"),
+  Value = round(c(expected_defaults, actual_defaults, avg_loss, max_loss, var_95, es_95), 2)
+)
+kable(loss_summary, caption = "Portfolio Credit Risk Summary")
+
+# Optional interpretation
+if (avg_loss > 10000) {
+  cat("\nThe portfolio shows moderate-to-high average credit exposure based on assumptions.")
+} else {
+  cat("\nThe portfolio loss exposure is relatively mild under current assumptions.")
+}
+```
+
+## Conclusion
+
+This simulation provides an overview of portfolio exposure to credit risk based on assumed PD, LGD, and EAD inputs. While the average loss is moderate, concentration risk or economic downturns could amplify losses. Future enhancements could include correlated defaults, sector-specific LGDs, or macroeconomic stress scenarios.

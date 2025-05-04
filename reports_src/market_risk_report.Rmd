@@ -1,0 +1,102 @@
+---
+title: "Market Risk Simulation Report"
+author: "Amanda Achiangia"
+date: "`r Sys.Date()`"
+output: pdf_document
+fontsize: 11pt
+geometry: margin=1in
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(PerformanceAnalytics)
+library(quantmod)
+library(MASS)
+library(ggplot2)
+library(kableExtra)
+```
+
+## Executive Summary
+
+This report analyzes market risk for a financial portfolio using Monte Carlo simulations and parametric methods. Simulated returns reflect fat-tailed behavior using the Student's t-distribution. Key risk measures such as Value at Risk (VaR) and Expected Shortfall (ES) are estimated and validated using Kupiec’s backtest against actual returns from AAPL.
+
+## Methodology
+- Generate 10,000 one-day return paths using the t-distribution (df = 3)
+- Calculate 95% one-day VaR and ES
+- Backtest simulated VaR using Kupiec’s test with actual historical returns
+
+## Simulated Returns & Risk Metrics
+
+```{r market-sim, fig.cap="Simulated Daily Market Returns"}
+sim_returns <- rt(10000, df = 3) * (0.25 / sqrt(252)) + 0.0002
+hist(sim_returns, breaks = 40, col = 'darkgreen', main = "Simulated Returns", xlab = "Returns")
+
+var_val <- quantile(sim_returns, 0.05)
+es_val <- mean(sim_returns[sim_returns < var_val])
+abline(v = var_val, col = "red", lwd = 2)
+
+risk_metrics <- data.frame(
+  Metric = c("VaR (95%)", "Expected Shortfall"),
+  Value = round(c(var_val, es_val), 5)
+)
+kable(risk_metrics)
+
+if (es_val < -0.05) {
+  cat("\nThe Expected Shortfall exceeds -5%, suggesting high downside risk exposure.")
+} else {
+  cat("\nThe Expected Shortfall is moderate, indicating manageable tail risk.")
+}
+```
+
+## Kupiec Backtest
+
+```{r kupiec-test, results='asis'}
+kupiec_test <- function(actual_returns, var_series, alpha = 0.05) {
+  n <- length(actual_returns)
+  failures <- actual_returns < -var_series
+  x <- sum(failures)
+  pi_hat <- x / n
+
+  if (pi_hat == 0 || pi_hat == 1) return(data.frame(
+    Breaches = x,
+    LR_pof = NA,
+    p_value = NA,
+    Result = "Test undefined (0% or 100% breach rate)"
+  ))
+
+  lr_pof <- -2 * (log((1 - alpha)^(n - x) * alpha^x) -
+                  log((1 - pi_hat)^(n - x) * pi_hat^x))
+  p_value <- 1 - pchisq(lr_pof, df = 1)
+
+  data.frame(
+    Breaches = x,
+    LR_pof = round(lr_pof, 4),
+    p_value = round(p_value, 4),
+    Result = ifelse(p_value > 0.05, "Pass", "Fail")
+  )
+}
+
+getSymbols("AAPL", from = "2022-01-01", to = "2023-01-01")
+actual_returns <- dailyReturn(Cl(AAPL))
+test_result <- kupiec_test(actual_returns, rep(abs(var_val), length(actual_returns)))
+kable(test_result, caption = "Kupiec Test Results for Simulated VaR")
+
+if (!is.na(test_result$p_value)) {
+  cat(ifelse(test_result$p_value > 0.05,
+             "The model passes Kupiec's test, suggesting statistically consistent risk prediction.",
+             "The model fails Kupiec's test, indicating a potential underestimation of tail risk."))
+}
+```
+
+## Breaches Visualization
+
+```{r breach-plot, fig.cap="Actual Returns with Simulated VaR Breaches"}
+var_threshold <- var_val
+plot(actual_returns, type = "l", col = "black", ylab = "Returns", main = "VaR Breaches Over Time")
+abline(h = var_threshold, col = "red", lwd = 2)
+points(which(actual_returns < var_threshold), actual_returns[actual_returns < var_threshold], col = "red", pch = 19)
+```
+
+## Conclusion
+
+This analysis demonstrates how simulated VaR and ES can be used to assess market risk exposure. The backtest with historical AAPL returns provides insight into the calibration of the model. Future improvements can include dynamic volatility models (e.g., GARCH) or filtered historical simulation for robustness.
