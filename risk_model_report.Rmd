@@ -1,0 +1,139 @@
+---
+title: "Integrated Risk Management for Multi-Asset Portfolios"
+author: "Amanda Achiangia"
+date: "`r Sys.Date()`"
+output: pdf_document
+fontsize: 11pt
+geometry: margin=1in
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(PerformanceAnalytics)
+library(quantmod)
+library(MASS)
+library(ggplot2)
+library(kableExtra)
+library(corrplot)
+```
+
+## Executive Summary
+
+This report presents an integrated risk management framework for assessing market and credit risk on a diversified portfolio of equities and corporate bonds. The model combines parametric and Monte Carlo simulation methods to compute Value at Risk (VaR) and Expected Shortfall (ES), while also simulating credit losses based on Probability of Default (PD), Loss Given Default (LGD), and Exposure at Default (EAD). The model includes a backtest using Kupiec's Proportion of Failures (POF) test to evaluate the consistency of VaR predictions with actual return data.
+
+## Methodology
+
+### Market Risk
+- Simulate daily returns using the t-distribution (`df = 3`) to reflect fat tails in financial data.
+- Calculate 1-day 95% VaR and Expected Shortfall from simulated returns.
+- Conduct Monte Carlo simulations (10,000 paths) based on user-defined volatility and expected return.
+
+### Credit Risk
+- Simulate credit loss distribution using Bernoulli trials for default events.
+- Loss = PD × LGD × EAD for each trial.
+- Display histogram of losses and compute credit risk metrics.
+
+### Correlation Analysis
+- Use historical stock prices for selected tickers.
+- Calculate correlation matrix and visualize using `corrplot`.
+
+## Model Validation (Kupiec Test)
+
+```{r kupiec-backtest, results='asis'}
+kupiec_test <- function(actual_returns, var_series, alpha = 0.05) {
+  n <- length(actual_returns)
+  failures <- actual_returns < -var_series
+  x <- sum(failures)
+  pi_hat <- x / n
+
+  if (pi_hat == 0 || pi_hat == 1) return(data.frame(
+    Breaches = x,
+    LR_pof = NA,
+    p_value = NA,
+    Result = "Test undefined (0% or 100% breach rate)"
+  ))
+
+  lr_pof <- -2 * (log((1 - alpha)^(n - x) * alpha^x) -
+                  log((1 - pi_hat)^(n - x) * pi_hat^x))
+  p_value <- 1 - pchisq(lr_pof, df = 1)
+
+  data.frame(
+    Breaches = x,
+    LR_pof = round(lr_pof, 4),
+    p_value = round(p_value, 4),
+    Result = ifelse(p_value > 0.05, "Pass", "Fail")
+  )
+}
+
+getSymbols("AAPL", from = "2022-01-01", to = "2023-01-01")
+actual_returns <- dailyReturn(Cl(AAPL))
+sim_var <- -0.0315  # replace with your VaR result
+test_result <- kupiec_test(actual_returns, rep(abs(sim_var), length(actual_returns)))
+kable(test_result, caption = "Kupiec Test Results for 95% VaR")
+
+if (!is.na(test_result$p_value)) {
+  cat(ifelse(test_result$p_value > 0.05,
+             "The Kupiec test indicates that the model's predicted risk levels are statistically consistent with observed market outcomes.",
+             "The Kupiec test failed, suggesting the model may be underestimating or overestimating risk."))
+}
+```
+
+## Visual Outputs
+
+### Simulated Returns Distribution
+```{r sim-returns-plot, fig.cap="Simulated Daily Market Returns"}
+sim_returns <- rt(10000, df = 3) * (0.25 / sqrt(252)) + 0.0002
+hist(sim_returns, breaks = 40, col = 'darkgreen', main = "Simulated Returns", xlab = "Returns")
+
+var_val <- quantile(sim_returns, 0.05)
+es_val <- mean(sim_returns[sim_returns < var_val])
+abline(v = var_val, col = "red", lwd = 2)
+
+if (es_val < -0.05) {
+  cat("\nThe Expected Shortfall exceeds -5%, suggesting the portfolio is highly exposed to extreme downside risk.\n")
+} else {
+  cat("\nThe Expected Shortfall is moderate, indicating limited exposure to tail events.\n")
+}
+```
+
+### VaR Breaches Over Time
+```{r breach-plot, fig.cap="Actual Returns with 95% VaR Breaches"}
+var_threshold <- -0.0315
+plot(actual_returns, type = "l", col = "black", ylab = "Returns", main = "VaR Breaches Over Time")
+abline(h = var_threshold, col = "red", lwd = 2)
+points(which(actual_returns < var_threshold), actual_returns[actual_returns < var_threshold], col = "red", pch = 19)
+```
+
+## Credit Risk Simulation
+```{r credit-risk, fig.cap="Simulated Credit Losses"}
+set.seed(123)
+pd <- 0.05
+lgd <- 0.6
+ead <- 100000
+n <- 1000
+
+losses <- rbinom(n, 1, pd) * lgd * ead
+hist(losses, breaks = 20, col = "purple", main = "Credit Loss Distribution", xlab = "Loss Amount")
+
+avg_loss <- mean(losses)
+max_loss <- max(losses)
+cat(paste("\nAverage Loss:", round(avg_loss, 2)))
+cat(paste("\nMaximum Loss:", round(max_loss, 2)))
+```
+
+## Correlation Analysis
+```{r correlation-analysis, fig.cap="Correlation Matrix for Selected Tickers"}
+tickers <- c("AAPL", "MSFT", "GOOG", "AMZN")
+getSymbols(tickers, from = "2022-01-01", to = "2023-01-01")
+prices <- do.call(merge, lapply(tickers, function(t) Cl(get(t))))
+returns <- na.omit(ROC(prices))
+corr_matrix <- cor(returns)
+corrplot(corr_matrix, method = "color", type = "lower", tl.cex = 0.8)
+```
+
+## Limitations & Extensions
+
+- The model assumes i.i.d. returns; future work should explore GARCH models for volatility clustering.
+- Current simulations use fixed volatilities — rolling VaR or EWMA could improve responsiveness.
+- Historical simulation or filtered historical simulation could further improve tail risk modeling.
+- The credit risk model does not incorporate macroeconomic covariates — an extension with logistic regression or machine learning could improve predictions.
